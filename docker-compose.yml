@@ -1,0 +1,63 @@
+services:
+  staywise-mysql:
+    image: mysql:8.4
+    container_name: staywise-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: staywise
+      MYSQL_USER: staywise_app
+      MYSQL_PASSWORD: staywise_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - staywise-mysql-data:/var/lib/mysql
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -prootpassword || mysqladmin ping -h localhost -u staywise_app -pstaywise_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - staywise-net
+
+  staywise-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: staywise-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://staywise-mysql:3306/staywise?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: staywise_app
+      SPRING_DATASOURCE_PASSWORD: staywise_password
+      STAYWISE_JWT_SECRET: staywise_super_secret_jwt_key_staywise_platform_2026_secured
+    depends_on:
+      staywise-mysql:
+        condition: service_healthy
+    networks:
+      - staywise-net
+
+  staywise-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: staywise-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - staywise-backend
+    networks:
+      - staywise-net
+
+networks:
+  staywise-net:
+    driver: bridge
+
+volumes:
+  staywise-mysql-data:
+    name: staywise-mysql-data
